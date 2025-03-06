@@ -4,24 +4,43 @@ import { Keypair, PublicKey } from '@solana/web3.js'
 import { useMemo } from 'react'
 import { ellipsify } from '../ui/ui-layout'
 import { ExplorerLink } from '../cluster/cluster-ui'
-import { useVotingProgram, useVotingProgramAccount } from './voting-data-access'
+import { useVotingProgram4Polls, useVotingProgramCandidateAccount, useVotingProgramPollAccount } from './voting-data-access'
+import { useWallet } from '@solana/wallet-adapter-react'
 
 export function VotingCreate() {
-  const { initialize } = useVotingProgram()
+  const { initializePoll } = useVotingProgram4Polls()
+
+  const handleCreatePoll = async() => {
+    const name = window.prompt('Enter poll name:')
+    const description = window.prompt('Enter poll description:')
+    const startTime = Date.now()
+    const endTime = startTime + 7 * 24 * 60 * 60 * 1000 // 7 days from now
+
+    if (!name || !description) return
+
+    initializePoll.mutateAsync({
+      pollId: Math.floor(Math.random() * 1000000),
+      startTime,
+      endTime,
+      name,
+      description,
+    })
+
+  }
 
   return (
     <button
       className="btn btn-xs lg:btn-md btn-primary"
-      onClick={() => initialize.mutateAsync(Keypair.generate())}
-      disabled={initialize.isPending}
+      onClick={handleCreatePoll}
+      disabled={initializePoll.isPending}
     >
-      Create {initialize.isPending && '...'}
+      Create Poll {initializePoll.isPending && '...'}
     </button>
   )
 }
 
 export function VotingList() {
-  const { accounts, getProgramAccount } = useVotingProgram()
+  const { getPolls, getProgramAccount } = useVotingProgram4Polls()
 
   if (getProgramAccount.isLoading) {
     return <span className="loading loading-spinner loading-lg"></span>
@@ -35,12 +54,12 @@ export function VotingList() {
   }
   return (
     <div className={'space-y-6'}>
-      {accounts.isLoading ? (
+      {getPolls.isLoading ? (
         <span className="loading loading-spinner loading-lg"></span>
-      ) : accounts.data?.length ? (
+      ) : getPolls.data?.length ? (
         <div className="grid md:grid-cols-2 gap-4">
-          {accounts.data?.map((account) => (
-            <VotingCard key={account.publicKey.toString()} account={account.publicKey} />
+          {getPolls.data?.map((poll) => (
+            <PollCard key={poll.publicKey.toString()} account={poll.publicKey} />
           ))}
         </div>
       ) : (
@@ -53,66 +72,156 @@ export function VotingList() {
   )
 }
 
-function VotingCard({ account }: { account: PublicKey }) {
-  const { accountQuery, incrementMutation, setMutation, decrementMutation, closeMutation } = useVotingProgramAccount({
-    account,
+function PollCard({ account }: { account: PublicKey }) {
+  const { publicKey: walletPublicKey } = useWallet()
+  const { getPollAccountData, initializeCandidate, getCandidateAccountsData4Poll } = useVotingProgramPollAccount({
+    pollAccount: account,
   })
 
-  const count = useMemo(() => accountQuery.data?.count ?? 0, [accountQuery.data?.count])
+  const handleAddCandidate = async () => {
+    const candidateName = window.prompt('Enter candidate name:')
+    const candidateDescription = window.prompt('Enter candidate description:')
+    
+    if (!candidateName || !candidateDescription || !getPollAccountData.data?.pollId) return
 
-  return accountQuery.isLoading ? (
+    try {
+      await  initializeCandidate.mutateAsync({
+        pollId: getPollAccountData.data.pollId.toNumber(),
+        candidateName,
+        candidateDescription,
+      })
+      // Refresh both the individual candidate and all candidates data
+      await Promise.all([
+        getPollAccountData.refetch(),
+        getCandidateAccountsData4Poll.refetch(),
+      ]);
+    } catch (error) {
+      console.error('Error voting:', error);
+    }
+  }
+
+  return getPollAccountData.isLoading ? (
     <span className="loading loading-spinner loading-lg"></span>
   ) : (
-    <div className="card card-bordered border-base-300 border-4 text-neutral-content">
-      <div className="card-body items-center text-center">
+    <div className="card bg-base-200 shadow-xl">
+      <div className="card-body p-6">
         <div className="space-y-6">
-          <h2 className="card-title justify-center text-3xl cursor-pointer" onClick={() => accountQuery.refetch()}>
-            {count}
-          </h2>
-          <div className="card-actions justify-around">
-            <button
-              className="btn btn-xs lg:btn-md btn-outline"
-              onClick={() => incrementMutation.mutateAsync()}
-              disabled={incrementMutation.isPending}
-            >
-              Increment
-            </button>
-            <button
-              className="btn btn-xs lg:btn-md btn-outline"
-              onClick={() => {
-                const value = window.prompt('Set value to:', count.toString() ?? '0')
-                if (!value || parseInt(value) === count || isNaN(parseInt(value))) {
-                  return
-                }
-                return setMutation.mutateAsync(parseInt(value))
-              }}
-              disabled={setMutation.isPending}
-            >
-              Set
-            </button>
-            <button
-              className="btn btn-xs lg:btn-md btn-outline"
-              onClick={() => decrementMutation.mutateAsync()}
-              disabled={decrementMutation.isPending}
-            >
-              Decrement
-            </button>
+          <div>
+            <div className="flex items-center gap-2"><h2 className="card-title text-2xl font-bold text-primary">{getPollAccountData.data?.pollName}</h2><ExplorerLink path={`account/${account}`} label={ellipsify(account.toString())} /></div>
+            <p className="text-base mt-2">{getPollAccountData.data?.pollDescription}</p>
+            <div className="bg-base-300 rounded-lg p-3 mt-4 text-sm">
+              <p className="flex justify-between">
+                <span className="font-semibold">Start:</span>
+                <span>{new Date((getPollAccountData.data?.pollVotingStart.toNumber() ?? 0)).toLocaleString()}</span>
+              </p>
+              <p className="flex justify-between mt-1">
+                <span className="font-semibold">End:</span>
+                <span>{new Date((getPollAccountData.data?.pollVotingEnd.toNumber() ?? 0)).toLocaleString()}</span>
+              </p>
+            </div>
           </div>
-          <div className="text-center space-y-4">
-            <p>
-              <ExplorerLink path={`account/${account}`} label={ellipsify(account.toString())} />
-            </p>
+
+          <div className="divider before:bg-primary/20 after:bg-primary/20">Candidates</div>
+          
+          <div className="space-y-4">
+            {getCandidateAccountsData4Poll.isLoading ? (
+              <span className="loading loading-spinner loading-md"></span>
+            ) : getCandidateAccountsData4Poll.data && getCandidateAccountsData4Poll.data.length > 0 ? (
+              <div className="space-y-3">                
+                {getCandidateAccountsData4Poll.data.map((candidate) => (
+                  <CandidateCard 
+                    key={candidate.publicKey.toString()} 
+                    account={candidate.publicKey}
+                    data={candidate.account}
+                    pollId={getPollAccountData.data?.pollId.toNumber() || 0}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-center py-4 bg-base-300 rounded-lg">
+                No candidates yet 
+                {getCandidateAccountsData4Poll.isError && ` (Error: ${getCandidateAccountsData4Poll.error})`}
+              </p>
+            )}
+            
+            {walletPublicKey && getPollAccountData.data?.creator?.equals(walletPublicKey) && (
+              <button
+                className="btn btn-secondary w-full"
+                onClick={handleAddCandidate}
+                disabled={initializeCandidate.isPending}
+              >
+                Add Candidate {initializeCandidate.isPending && '...'}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function CandidateCard({ account, data, pollId }: { account: PublicKey; data: any; pollId: number }) {
+  const { voteForCandidate, getCandidateAccountData } = useVotingProgramCandidateAccount({ candidateAccount: account })
+  const { getCandidateAccountsData4Poll } = useVotingProgramPollAccount({
+    pollAccount: new PublicKey(data.pollAccount),
+  })
+
+  // Correctly access the properties from the account data
+  const candidateName = data.candidateName;
+  const candidateDescription = data.candidateDescription;
+  const voteCount = data.candidateVotes?.toString() || '0';
+
+  const handleVote = async () => {
+    if (!pollId || !candidateName) {
+      console.error('Missing required data:', { pollId, candidateName });
+      return;
+    }
+    
+    try {
+      await voteForCandidate.mutateAsync({
+        pollId,
+        candidateName,
+      });
+      // Refresh both the individual candidate and all candidates data
+      await Promise.all([
+        getCandidateAccountData.refetch(),
+        getCandidateAccountsData4Poll.refetch(),
+      ]);      
+    } catch (error) {
+      console.error('Error voting:', error);      
+    }
+  }
+
+  return (
+    <div className="bg-base-100 rounded-lg shadow-md hover:shadow-lg transition-shadow">
+      <div className="p-3">
+        <div className="flex justify-between items-center gap-2">
+          <div className="flex-1">
+            <ExplorerLink 
+              path={`account/${account}`} 
+              label={candidateName}
+              className="font-bold text-lg text-primary hover:underline"
+            />
+            <p className="text-sm text-base-content/70">{candidateDescription}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="badge badge-primary">
+              {getCandidateAccountData.isLoading ? (
+                <span className="loading loading-spinner loading-xs"></span>
+              ) : (
+                `${voteCount}`
+              )}
+            </div>
             <button
-              className="btn btn-xs btn-secondary btn-outline"
-              onClick={() => {
-                if (!window.confirm('Are you sure you want to close this account?')) {
-                  return
-                }
-                return closeMutation.mutateAsync()
-              }}
-              disabled={closeMutation.isPending}
+              className="btn btn-primary btn-sm"
+              onClick={handleVote}
+              disabled={voteForCandidate.isPending || getCandidateAccountData.isLoading}
             >
-              Close
+              {voteForCandidate.isPending ? (
+                <span className="loading loading-spinner loading-xs"/>
+              ) : (
+                'Vote'
+              )}
             </button>
           </div>
         </div>

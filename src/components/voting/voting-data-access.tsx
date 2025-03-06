@@ -9,8 +9,33 @@ import toast from 'react-hot-toast'
 import { useCluster } from '../cluster/cluster-data-access'
 import { useAnchorProvider } from '../solana/solana-provider'
 import { useTransactionToast } from '../ui/ui-layout'
+import BN from "bn.js";
 
-export function useVotingProgram() {
+interface InitializePollArgs {
+  pollId: number;
+  startTime: number;
+  endTime: number;
+  name: string;
+  description: string;
+}
+
+interface InitializeCandidateArgs { 
+  pollId: number;
+  candidateName: string;
+  candidateDescription: string;
+}
+
+interface VoteForCandidateArgs {
+  pollId: number;
+  candidateName: string;
+}
+
+export function useClusterName() {
+  const { cluster } = useCluster();
+  return cluster.name;
+}
+
+export function useVotingProgram4Polls() {
   const { connection } = useConnection()
   const { cluster } = useCluster()
   const transactionToast = useTransactionToast()
@@ -18,9 +43,9 @@ export function useVotingProgram() {
   const programId = useMemo(() => getVotingProgramId(cluster.network as Cluster), [cluster])
   const program = useMemo(() => getVotingProgram(provider, programId), [provider, programId])
 
-  const accounts = useQuery({
-    queryKey: ['voting', 'all', { cluster }],
-    queryFn: () => program.account.voting.all(),
+  const getPolls = useQuery({
+    queryKey: ['polls', 'all', { cluster }],
+    queryFn: () => program.account.pollAccount.all(),
   })
 
   const getProgramAccount = useQuery({
@@ -28,77 +53,115 @@ export function useVotingProgram() {
     queryFn: () => connection.getParsedAccountInfo(programId),
   })
 
-  const initialize = useMutation({
-    mutationKey: ['voting', 'initialize', { cluster }],
-    mutationFn: (keypair: Keypair) =>
-      program.methods.initialize().accounts({ voting: keypair.publicKey }).signers([keypair]).rpc(),
+  const initializePoll = useMutation<string, Error, InitializePollArgs>({
+    mutationKey: ['poll', 'initialize', { cluster }],
+    mutationFn: async ({ pollId, startTime, endTime, name, description }) => {      
+      const tx = program.methods
+        .initializePoll(new BN(pollId), new BN(startTime), new BN(endTime), name, description)         
+        .rpc();
+
+      console.log('Initialize poll successfully, tx:', tx);
+      return tx;
+    },
     onSuccess: (signature) => {
       transactionToast(signature)
-      return accounts.refetch()
+      return getPolls.refetch()
     },
-    onError: () => toast.error('Failed to initialize account'),
+    onError: () => toast.error('Failed to initialize poll'),
   })
 
   return {
     program,
     programId,
-    accounts,
+    getPolls,
     getProgramAccount,
-    initialize,
+    initializePoll,
   }
 }
 
-export function useVotingProgramAccount({ account }: { account: PublicKey }) {
+export function useVotingProgramPollAccount({ pollAccount }: { pollAccount: PublicKey }) {
   const { cluster } = useCluster()
   const transactionToast = useTransactionToast()
-  const { program, accounts } = useVotingProgram()
+  const { program, getPolls } = useVotingProgram4Polls()
 
-  const accountQuery = useQuery({
-    queryKey: ['voting', 'fetch', { cluster, account }],
-    queryFn: () => program.account.voting.fetch(account),
-  })
-
-  const closeMutation = useMutation({
-    mutationKey: ['voting', 'close', { cluster, account }],
-    mutationFn: () => program.methods.close().accounts({ voting: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx)
-      return accounts.refetch()
+  const getPollAccountData = useQuery({
+    queryKey: ['poll', 'fetch', { cluster, pollAccount }],
+    queryFn: async () => {      
+      const pollAccountData = await program.account.pollAccount.fetch(pollAccount);
+      return pollAccountData;
     },
   })
 
-  const decrementMutation = useMutation({
-    mutationKey: ['voting', 'decrement', { cluster, account }],
-    mutationFn: () => program.methods.decrement().accounts({ voting: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx)
-      return accountQuery.refetch()
+  
+  const getCandidateAccountsData4Poll = useQuery({
+    queryKey: ['all-candidates', 'fetch', { cluster, pollAccount }],
+    queryFn: async () => {
+      console.log('Fetching all candidates for the poll account:', pollAccount.toString());      
+      
+      // Get candidates by matching their PDA seeds using poll_account public key
+      const candidateAccounts = await program.account.candidateAccount.all([
+        {
+            memcmp: {
+                offset: 8,
+                bytes: pollAccount.toBase58()
+            }
+        }
+    ]);
+
+      console.log('Found candidates:', candidateAccounts);
+      return candidateAccounts;
     },
   })
 
-  const incrementMutation = useMutation({
-    mutationKey: ['voting', 'increment', { cluster, account }],
-    mutationFn: () => program.methods.increment().accounts({ voting: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx)
-      return accountQuery.refetch()
+  const initializeCandidate = useMutation<string, Error, InitializeCandidateArgs>({
+    mutationKey: ['candidate', 'initialize', { cluster }],
+    mutationFn: async ({ pollId, candidateName, candidateDescription }) => {
+      const tx = program.methods.initializeCandidate(new BN(pollId), candidateName, candidateDescription)      
+        .rpc();
+      return tx;
     },
-  })
-
-  const setMutation = useMutation({
-    mutationKey: ['voting', 'set', { cluster, account }],
-    mutationFn: (value: number) => program.methods.set(value).accounts({ voting: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx)
-      return accountQuery.refetch()
+    onSuccess: (signature) => {
+      transactionToast(signature)
+      return getPolls.refetch()
     },
+    onError: () => toast.error('Failed to initialize candidate'),
   })
 
   return {
-    accountQuery,
-    closeMutation,
-    decrementMutation,
-    incrementMutation,
-    setMutation,
+    getPollAccountData,
+    initializeCandidate,
+    getCandidateAccountsData4Poll
   }
 }
+
+
+export function useVotingProgramCandidateAccount({ candidateAccount }: { candidateAccount: PublicKey }) {
+  const { cluster } = useCluster()
+  const transactionToast = useTransactionToast()
+  const { program, getPolls } = useVotingProgram4Polls()
+
+  const getCandidateAccountData = useQuery({
+    queryKey: ['candidate', 'fetch', { cluster, candidateAccount }],
+    queryFn: () => program.account.candidateAccount.fetch(candidateAccount),
+  })
+
+  const voteForCandidate = useMutation<string, Error, VoteForCandidateArgs>({
+    mutationKey: ['candidate', 'initialize', { cluster }],
+    mutationFn: async ({ pollId, candidateName }) => {
+      const tx = program.methods.vote(new BN(pollId), candidateName)        
+        .rpc();
+      return tx;
+    },
+    onSuccess: (signature) => {
+      transactionToast(signature)
+      return getPolls.refetch()
+    },
+    onError: () => toast.error('Failed to vote for candidate'),
+  })
+
+  return {
+    getCandidateAccountData,
+    voteForCandidate
+  }
+}
+
