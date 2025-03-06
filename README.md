@@ -1,4 +1,4 @@
-# legacy-voting
+# Solana Voting DAPP
 
 ## Getting Started
 
