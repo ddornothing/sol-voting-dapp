@@ -1,7 +1,6 @@
 'use client'
 
-import { Keypair, PublicKey } from '@solana/web3.js'
-import { useMemo } from 'react'
+import { PublicKey } from '@solana/web3.js'
 import { ellipsify } from '../ui/ui-layout'
 import { ExplorerLink } from '../cluster/cluster-ui'
 import { useVotingProgram4Polls, useVotingProgramCandidateAccount, useVotingProgramPollAccount } from './voting-data-access'
@@ -13,13 +12,13 @@ export function VotingCreate() {
   const handleCreatePoll = async() => {
     const name = window.prompt('Enter poll name:')
     const description = window.prompt('Enter poll description:')
-    const startTime = Date.now()
-    const endTime = startTime + 7 * 24 * 60 * 60 * 1000 // 7 days from now
+    const startTime = Math.floor(Date.now() / 1000) // Convert milliseconds to seconds
+    const endTime = startTime + 7 * 24 * 60 * 60 // 7 days from now in seconds
 
     if (!name || !description) return
 
     initializePoll.mutateAsync({
-      pollId: Math.floor(Math.random() * 1000000),
+      pollId: Math.floor(Math.random() * 10000000), // TODO: give from a sequence number
       startTime,
       endTime,
       name,
@@ -112,11 +111,11 @@ function PollCard({ account }: { account: PublicKey }) {
             <div className="bg-base-300 rounded-lg p-3 mt-4 text-sm">
               <p className="flex justify-between">
                 <span className="font-semibold">Start:</span>
-                <span>{new Date((getPollAccountData.data?.pollVotingStart.toNumber() ?? 0)).toLocaleString()}</span>
+                <span>{new Date((getPollAccountData.data?.pollVotingStart.toNumber() ?? 0) * 1000).toLocaleString()}</span>
               </p>
               <p className="flex justify-between mt-1">
                 <span className="font-semibold">End:</span>
-                <span>{new Date((getPollAccountData.data?.pollVotingEnd.toNumber() ?? 0)).toLocaleString()}</span>
+                <span>{new Date((getPollAccountData.data?.pollVotingEnd.toNumber() ?? 0) * 1000).toLocaleString()}</span>
               </p>
             </div>
           </div>
