@@ -61,7 +61,39 @@ pub mod voting {
 
         Ok(())
     }
-    
+
+    pub fn update_poll(ctx: Context<UpdatePoll>, 
+                      _poll_id: u64,
+                      start_time: u64, 
+                      end_time: u64,
+                      name: String,
+                      description: String) -> Result<()> {
+        require!(
+            ctx.accounts.poll_account.creator == ctx.accounts.signer.key(),
+            ErrorCode::UnauthorizedPollModification
+        );
+
+        let poll_account = &mut ctx.accounts.poll_account;
+        poll_account.poll_name = name;
+        poll_account.poll_description = description;
+        poll_account.poll_voting_start = start_time;
+        poll_account.poll_voting_end = end_time;
+        Ok(())
+    }
+
+    pub fn update_candidate(ctx: Context<UpdateCandidate>,
+                          _poll_id: u64,
+                          _candidate_name: String,
+                          new_description: String) -> Result<()> {
+        require!(
+            ctx.accounts.poll_account.creator == ctx.accounts.signer.key(),
+            ErrorCode::UnauthorizedCandidateModification
+        );
+
+        let candidate_account = &mut ctx.accounts.candidate_account;
+        candidate_account.candidate_description = new_description;
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -129,6 +161,42 @@ pub struct Vote<'info> {
     pub candidate_account: Account<'info, CandidateAccount>,
 }
 
+#[derive(Accounts)]
+#[instruction(poll_id: u64)]
+pub struct UpdatePoll<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"poll".as_ref(), poll_id.to_le_bytes().as_ref()],
+        bump,
+    )]
+    pub poll_account: Account<'info, PollAccount>,
+}
+
+#[derive(Accounts)]
+#[instruction(poll_id: u64, candidate_name: String)]
+pub struct UpdateCandidate<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"poll".as_ref(), poll_id.to_le_bytes().as_ref()],
+        bump,
+    )]
+    pub poll_account: Account<'info, PollAccount>,
+
+    #[account(
+        mut,
+        seeds = [b"candidate".as_ref(), poll_account.key().as_ref(), candidate_name.as_ref()],
+        bump,
+        has_one = poll_account
+    )]
+    pub candidate_account: Account<'info, CandidateAccount>,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct CandidateAccount {
@@ -163,4 +231,6 @@ pub enum ErrorCode {
     VotingEnded,
     #[msg("Only the poll creator can add candidate")]
     UnauthorizedCandidateModification,
+    #[msg("Only the poll creator can modify the poll")]
+    UnauthorizedPollModification,
 }
