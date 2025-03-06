@@ -73,7 +73,7 @@ export function VotingList() {
 
 function PollCard({ account }: { account: PublicKey }) {
   const { publicKey: walletPublicKey } = useWallet()
-  const { getPollAccountData, initializeCandidate, getCandidateAccountsData4Poll } = useVotingProgramPollAccount({
+  const { getPollAccountData, initializeCandidate, getCandidateAccountsData4Poll, updatePoll, updateCandidate } = useVotingProgramPollAccount({
     pollAccount: account,
   })
 
@@ -96,6 +96,42 @@ function PollCard({ account }: { account: PublicKey }) {
       ]);
     } catch (error) {
       console.error('Error voting:', error);
+    }
+  }
+
+  const handleUpdatePoll = async (pollId: number) => {
+    try {
+      const name = window.prompt('Enter new poll name:')
+      const description = window.prompt('Enter new poll description:')
+      const startTime = Math.floor(Date.now() / 1000)
+      const endTime = startTime + 7 * 24 * 60 * 60
+
+      if (!name || !description) return
+
+      await updatePoll.mutateAsync({
+        pollId,
+        startTime,
+        endTime,
+        name,
+        description
+      })
+    } catch (error) {
+      console.error("Error updating poll:", error)
+    }
+  }
+
+  const handleUpdateCandidate = async (pollId: number, candidateName: string) => {
+    try {
+      const newDescription = window.prompt('Enter new candidate description:')
+      if (!newDescription) return
+
+      await updateCandidate.mutateAsync({
+        pollId,
+        candidateName,
+        newDescription
+      })
+    } catch (error) {
+      console.error("Error updating candidate:", error)
     }
   }
 
@@ -153,6 +189,16 @@ function PollCard({ account }: { account: PublicKey }) {
               </button>
             )}
           </div>
+          {walletPublicKey && getPollAccountData.data?.creator?.equals(walletPublicKey) && (
+            <div className="flex gap-2 mt-4">
+              <button 
+                className="btn btn-primary btn-sm"
+                onClick={() => handleUpdatePoll(getPollAccountData.data?.pollId.toNumber() || 0)}
+              >
+                Update Poll
+              </button>
+            </div>  
+          )}
         </div>
       </div>
     </div>
@@ -160,8 +206,9 @@ function PollCard({ account }: { account: PublicKey }) {
 }
 
 function CandidateCard({ account, data, pollId }: { account: PublicKey; data: any; pollId: number }) {
+  const { publicKey: walletPublicKey } = useWallet()
   const { voteForCandidate, getCandidateAccountData } = useVotingProgramCandidateAccount({ candidateAccount: account })
-  const { getCandidateAccountsData4Poll } = useVotingProgramPollAccount({
+  const { getCandidateAccountsData4Poll, updateCandidate, getPollAccountData } = useVotingProgramPollAccount({
     pollAccount: new PublicKey(data.pollAccount),
   })
 
@@ -188,6 +235,21 @@ function CandidateCard({ account, data, pollId }: { account: PublicKey; data: an
       ]);      
     } catch (error) {
       console.error('Error voting:', error);      
+    }
+  }
+
+  const handleUpdateCandidate = async (pollId: number, candidateName: string) => {
+    try {
+      const newDescription = window.prompt('Enter new candidate description:')
+      if (!newDescription) return
+
+      await updateCandidate.mutateAsync({
+        pollId,
+        candidateName,
+        newDescription
+      })
+    } catch (error) {
+      console.error("Error updating candidate:", error)
     }
   }
 
@@ -224,6 +286,16 @@ function CandidateCard({ account, data, pollId }: { account: PublicKey; data: an
             </button>
           </div>
         </div>
+        {walletPublicKey && getPollAccountData.data?.creator?.equals(walletPublicKey) && (
+          <div className="flex gap-2 mt-4">
+            <button 
+              className="btn btn-secondary btn-sm"
+              onClick={() => handleUpdateCandidate(pollId, candidateName)}
+            >
+              Update Candidate
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

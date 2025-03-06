@@ -30,6 +30,20 @@ interface VoteForCandidateArgs {
   candidateName: string;
 }
 
+interface UpdatePollArgs {
+  pollId: number;
+  startTime: number;
+  endTime: number;
+  name: string;
+  description: string;
+}
+
+interface UpdateCandidateArgs {
+  pollId: number;
+  candidateName: string;
+  newDescription: string;
+}
+
 export function useClusterName() {
   const { cluster } = useCluster();
   return cluster.name;
@@ -127,10 +141,79 @@ export function useVotingProgramPollAccount({ pollAccount }: { pollAccount: Publ
     onError: () => toast.error('Failed to initialize candidate'),
   })
 
+  const updatePoll = useMutation<string, Error, UpdatePollArgs>({
+    mutationKey: ['poll', 'update', { cluster }],
+    mutationFn: async ({ pollId, startTime, endTime, name, description }) => {
+      const [pollPda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("poll"),
+          Buffer.from(new BN(pollId).toArray("le", 8))
+        ],
+        program.programId
+      )
+
+      const tx = await program.methods
+        .updatePoll(
+          new BN(pollId),
+          new BN(startTime),
+          new BN(endTime),
+          name,
+          description
+        )
+        .rpc()
+
+      return tx
+    },
+    onSuccess: (signature) => {
+      transactionToast(signature)
+      return getPolls.refetch()
+    },
+    onError: () => toast.error('Failed to update poll'),
+  })
+
+  const updateCandidate = useMutation<string, Error, UpdateCandidateArgs>({
+    mutationKey: ['candidate', 'update', { cluster }],
+    mutationFn: async ({ pollId, candidateName, newDescription }) => {
+      const [pollPda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("poll"),
+          Buffer.from(new BN(pollId).toArray("le", 8))
+        ],
+        program.programId
+      )
+
+      const [candidatePda] = PublicKey.findProgramAddressSync(
+        [
+          Buffer.from("candidate"),
+          pollPda.toBuffer(),
+          Buffer.from(candidateName)
+        ],
+        program.programId
+      )
+
+      const tx = await program.methods
+        .updateCandidate(
+          new BN(pollId),
+          candidateName,
+          newDescription
+        )
+        .rpc()
+
+      return tx
+    },
+    onSuccess: (signature) => {
+      transactionToast(signature)
+      return getPolls.refetch()
+    },
+    onError: () => toast.error('Failed to update candidate'),
+  })
+
   return {
     getPollAccountData,
     initializeCandidate,
-    getCandidateAccountsData4Poll
+    getCandidateAccountsData4Poll,
+    updatePoll,
+    updateCandidate
   }
 }
 

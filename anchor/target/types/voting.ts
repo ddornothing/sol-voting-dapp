@@ -170,6 +170,157 @@ export type Voting = {
       ]
     },
     {
+      "name": "updateCandidate",
+      "discriminator": [
+        66,
+        207,
+        186,
+        27,
+        59,
+        162,
+        119,
+        238
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "pollAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "pollId"
+              }
+            ]
+          },
+          "relations": [
+            "candidateAccount"
+          ]
+        },
+        {
+          "name": "candidateAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  97,
+                  110,
+                  100,
+                  105,
+                  100,
+                  97,
+                  116,
+                  101
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "pollAccount"
+              },
+              {
+                "kind": "arg",
+                "path": "candidateName"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "pollId",
+          "type": "u64"
+        },
+        {
+          "name": "candidateName",
+          "type": "string"
+        },
+        {
+          "name": "newDescription",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "updatePoll",
+      "discriminator": [
+        188,
+        131,
+        217,
+        106,
+        140,
+        114,
+        130,
+        5
+      ],
+      "accounts": [
+        {
+          "name": "signer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "pollAccount",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  111,
+                  108,
+                  108
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "pollId"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "pollId",
+          "type": "u64"
+        },
+        {
+          "name": "startTime",
+          "type": "u64"
+        },
+        {
+          "name": "endTime",
+          "type": "u64"
+        },
+        {
+          "name": "name",
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "string"
+        }
+      ]
+    },
+    {
       "name": "vote",
       "discriminator": [
         227,
@@ -297,6 +448,11 @@ export type Voting = {
       "code": 6002,
       "name": "unauthorizedCandidateModification",
       "msg": "Only the poll creator can add candidate"
+    },
+    {
+      "code": 6003,
+      "name": "unauthorizedPollModification",
+      "msg": "Only the poll creator can modify the poll"
     }
   ],
   "types": [
