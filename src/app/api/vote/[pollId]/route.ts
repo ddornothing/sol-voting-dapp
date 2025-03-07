@@ -5,6 +5,13 @@ import { BN, Program } from "@coral-xyz/anchor";
 
 const IDL = require('@/../anchor/target/idl/voting.json');
 
+// Define the required headers for Solana Actions
+const ACTION_HEADERS = {
+  ...ACTIONS_CORS_HEADERS,
+  'X-Action-Version': '1',
+  'X-Blockchain-Ids': 'solana:4uhcVJyU9pJkvQyS88uRDiswHXSCkY3z'
+};
+
 export const OPTIONS = GET;
 
 export async function GET(
@@ -33,7 +40,7 @@ export async function GET(
       if (isNaN(pollIdNum)) {
         return new Response("Invalid poll ID format", { 
           status: 400, 
-          headers: ACTIONS_CORS_HEADERS 
+          headers: ACTION_HEADERS 
         });
       }
       
@@ -54,7 +61,7 @@ export async function GET(
       } catch (error) {
         return new Response("Poll not found", { 
           status: 404, 
-          headers: ACTIONS_CORS_HEADERS 
+          headers: ACTION_HEADERS 
         });
       }
     }
@@ -116,12 +123,15 @@ export async function GET(
       }
     };
 
-    return Response.json(actionMetdata, { headers: ACTIONS_CORS_HEADERS});
+    return Response.json(actionMetdata, { headers: ACTION_HEADERS });
   } catch (error) {
     console.error("Error fetching poll data:", error);
-    return new Response("Failed to fetch poll data", { 
+    return new Response(JSON.stringify({ 
+      error: "Failed to fetch poll data",
+      details: error instanceof Error ? error.message : String(error)
+    }), { 
       status: 400, 
-      headers: ACTIONS_CORS_HEADERS 
+      headers: ACTION_HEADERS 
     });
   }
 }
@@ -135,9 +145,9 @@ export async function POST(
   const pollId = params.pollId;
 
   if (!candidateName) {
-    return new Response("Candidate parameter is required", {
+    return new Response(JSON.stringify({ error: "Candidate parameter is required" }), {
       status: 400,
-      headers: ACTIONS_CORS_HEADERS
+      headers: ACTION_HEADERS
     });
   }
 
@@ -164,9 +174,9 @@ export async function POST(
       // Convert pollId to a number and then to BN
       const pollIdNum = parseInt(params.pollId);
       if (isNaN(pollIdNum)) {
-        return new Response("Invalid poll ID format", { 
+        return new Response(JSON.stringify({ error: "Invalid poll ID format" }), { 
           status: 400, 
-          headers: ACTIONS_CORS_HEADERS 
+          headers: ACTION_HEADERS 
         });
       }
       
@@ -186,9 +196,9 @@ export async function POST(
         pollAccount = pollPda;
       } catch (fetchError) {
         console.error("Error fetching poll account:", fetchError);
-        return new Response("Poll not found", { 
+        return new Response(JSON.stringify({ error: "Poll not found" }), { 
           status: 404, 
-          headers: ACTIONS_CORS_HEADERS 
+          headers: ACTION_HEADERS 
         });
       }
     }
@@ -208,9 +218,9 @@ export async function POST(
     );
 
     if (!candidateAccount) {
-      return new Response("Invalid candidate", { 
+      return new Response(JSON.stringify({ error: "Invalid candidate" }), { 
         status: 400, 
-        headers: ACTIONS_CORS_HEADERS 
+        headers: ACTION_HEADERS 
       });
     }
 
@@ -219,9 +229,9 @@ export async function POST(
     try {
       voter = new PublicKey(body.account);
     } catch (error) {
-      return new Response("Invalid account", { 
+      return new Response(JSON.stringify({ error: "Invalid account" }), { 
         status: 400, 
-        headers: ACTIONS_CORS_HEADERS 
+        headers: ACTION_HEADERS 
       });
     }
 
@@ -242,7 +252,7 @@ export async function POST(
       })
       .instruction();
 
-    const blockhash = await connection.getLatestBlockhash();
+    const blockhash = await connection.getLatestBlockhash('confirmed');
     const transaction = new Transaction({
       feePayer: voter,
       blockhash: blockhash.blockhash,
@@ -257,12 +267,15 @@ export async function POST(
       }
     });
 
-    return Response.json(response, { headers: ACTIONS_CORS_HEADERS });
+    return Response.json(response, { headers: ACTION_HEADERS });
   } catch (error) {
     console.error("Error processing vote:", error);
-    return new Response("Failed to process vote", { 
+    return new Response(JSON.stringify({ 
+      error: "Failed to process vote",
+      details: error instanceof Error ? error.message : String(error)
+    }), { 
       status: 400, 
-      headers: ACTIONS_CORS_HEADERS 
+      headers: ACTION_HEADERS 
     });
   }
 }
