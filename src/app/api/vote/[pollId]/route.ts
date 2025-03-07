@@ -9,7 +9,7 @@ const IDL = require('@/../anchor/target/idl/voting.json');
 const ACTION_HEADERS = {
   ...ACTIONS_CORS_HEADERS,
   'X-Action-Version': '1',
-  'X-Blockchain-Ids': '2'
+  'X-Blockchain-Ids': 'solana:101,solana:102,solana:103'
 };
 
 export const OPTIONS = GET;
