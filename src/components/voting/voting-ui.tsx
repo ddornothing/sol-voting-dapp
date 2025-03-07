@@ -5,6 +5,7 @@ import { ellipsify } from '../ui/ui-layout'
 import { ExplorerLink } from '../cluster/cluster-ui'
 import { useVotingProgram4Polls, useVotingProgramCandidateAccount, useVotingProgramPollAccount } from './voting-data-access'
 import { useWallet } from '@solana/wallet-adapter-react'
+import { useEffect, useState } from "react";
 
 export function VotingCreate() {
   const { initializePoll } = useVotingProgram4Polls()
@@ -77,6 +78,27 @@ function PollCard({ account }: { account: PublicKey }) {
     pollAccount: account,
   })
 
+  const [blinksUrl, setBlinksUrl] = useState<string>('');
+
+  useEffect(() => {
+    // Set the Blinks URL after component mounts to avoid SSR issues
+    if (getPollAccountData.data?.pollId) {
+      const baseUrl = typeof window !== 'undefined' 
+        ? `${window.location.protocol}//${window.location.host}`
+        : 'http://localhost:3000';
+      
+      // Create a properly formatted Solana Action URL according to the specification
+      // Format: solana-action:<action-url>
+      const actionUrl = `${baseUrl}/api/vote/${getPollAccountData.data.pollId.toString()}`;
+      const solanaActionUrl = `solana-action:${actionUrl}`;
+      
+      // URL encode the action URL for the blink URL
+      // Format: https://dial.to/?action=<encoded-action-url>
+      const encodedActionUrl = encodeURIComponent(solanaActionUrl);
+      setBlinksUrl(`https://dial.to/?action=${encodedActionUrl}`);
+    }
+  }, [getPollAccountData.data?.pollId]);
+
   const handleAddCandidate = async () => {
     const candidateName = window.prompt('Enter candidate name:')
     const candidateDescription = window.prompt('Enter candidate description:')
@@ -142,7 +164,26 @@ function PollCard({ account }: { account: PublicKey }) {
       <div className="card-body p-6">
         <div className="space-y-6">
           <div>
-            <div className="flex items-center gap-2"><h2 className="card-title text-2xl font-bold text-primary">{getPollAccountData.data?.pollName}</h2><ExplorerLink path={`account/${account}`} label={ellipsify(account.toString())} /></div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <h2 className="card-title text-2xl font-bold text-primary">{getPollAccountData.data?.pollName}</h2>
+                <ExplorerLink path={`account/${account}`} label={ellipsify(account.toString())} />
+              </div>
+              <a 
+                href={blinksUrl} 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                className="flex items-center gap-2 bg-base-100 hover:bg-base-200 text-base-content py-2 px-4 rounded-full text-sm font-medium transition-colors"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                Share Blink
+              </a>
+            </div>
+            <p className="text-sm text-base-content/70 mt-1">ID: {getPollAccountData.data?.pollId.toString()}</p>
             <p className="text-base mt-2">{getPollAccountData.data?.pollDescription}</p>
             <div className="bg-base-300 rounded-lg p-3 mt-4 text-sm">
               <p className="flex justify-between">
